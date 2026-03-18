@@ -23,7 +23,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiohttp import ClientSession, TCPConnector, ClientTimeout
+from aiohttp import ClientSession, TCPConnector, ClientTimeout, web # Добавлен web для заглушки
 
 # ==============================================================================
 #                               CONFIG & CONSTANTS
@@ -806,8 +806,6 @@ async def cmd_start(message: Message):
 
     um.mark_active(uid)
 
-    # Removed message.delete() to keep user message
-
     text = (f"🛡 <b>{PROXY_NAME}</b>\n\n"
             f"✨ Приветствуем, <b>{message.from_user.first_name}</b>!\n\n"
             f"🚀 Быстрые и надежные прокси сервера\n"
@@ -839,7 +837,6 @@ async def process_promo_code(message: Message, state: FSMContext):
     if code in PROMO_CODES:
         reward = PROMO_CODES[code]
         
-        # Защита от повторного использования на уровне юзера
         user = dm.get_user(uid)
         used_promos = user.get("used_promos", []) if user else []
         
@@ -1065,7 +1062,6 @@ async def pay_approve_handler(call: CallbackQuery):
         except:
             pass
     else:
-        # Выдаем прокси
         proxies = pm.get_proxies_by_type().get(item_type.upper(), [])
         if not proxies:
             await call.message.edit_text(f"❌ Нет доступных {item_type.upper()} прокси в базе для выдачи.", parse_mode="HTML")
@@ -1075,7 +1071,7 @@ async def pay_approve_handler(call: CallbackQuery):
                 pass
             return
 
-        proxy = proxies[0] # Берем первый доступный
+        proxy = proxies[0]
         server = proxy.get('server')
         port = proxy.get('port')
         
@@ -1447,7 +1443,6 @@ async def main():
     else:
         logger.info(f"Новых прокси нет. В базе: {total_proxies}")
 
-    # Проверяем прямой доступ к Telegram API
     logger.info("Проверка подключения к Telegram API...")
     try:
         direct_conn_ok = await asyncio.wait_for(check_telegram_connection(), timeout=5)
@@ -1468,7 +1463,23 @@ async def main():
     # Пинг запускается в фоне
     asyncio.create_task(ping_loop())
 
-    # Безопасный запуск поллинга для Leapcell
+    # --- ДОБАВЛЕНО: ФЕЙКОВЫЙ ВЕБ-СЕРВЕР ДЛЯ LEAPCELL ---
+    async def handle_request(request):
+        return web.Response(text="bot running")
+    
+    app = web.Application()
+    app.router.add_get('/', handle_request)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    logger.info(f"✅ Фейковый веб-сервер успешно запущен на порту {port}")
+    # ---------------------------------------------------
+
+    # Безопасный запуск поллинга для бота
     retries = 5
     while retries > 0:
         try:
@@ -1489,4 +1500,3 @@ if __name__ == "__main__":
         logger.info("Bot stopped by user.")
     except Exception as e:
         logger.critical(f"FATAL CRASH: {e}")
-
