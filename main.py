@@ -23,7 +23,7 @@ from aiogram.fsm.state import StatesGroup, State
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from aiogram.exceptions import TelegramBadRequest, TelegramNetworkError
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiohttp import ClientSession, TCPConnector, ClientTimeout, web # Добавлен web для заглушки
+from aiohttp import ClientSession, TCPConnector, ClientTimeout, web
 
 # ==============================================================================
 #                               CONFIG & CONSTANTS
@@ -662,13 +662,14 @@ class Keyboards:
         kb.button(text="👥 Партнерка", callback_data="referrals")
         kb.button(text="⭐ Отзывы", callback_data="reviews_list")
         kb.button(text="💬 Поддержка", callback_data="support")
+        kb.button(text="🪞 Зеркала", url="https://t.me/ZRKSalutproxyBOT")
         kb.button(text="ℹ️ О системе", callback_data="about")
 
         if is_admin:
             kb.button(text="👑 Админ-панель", callback_data="admin_panel")
-            kb.adjust(1, 1, 1, 1, 2, 2, 2, 1)
+            kb.adjust(1, 1, 1, 1, 2, 2, 2, 1, 1)
         else:
-            kb.adjust(1, 1, 1, 1, 2, 2, 2, 1)
+            kb.adjust(1, 1, 1, 1, 2, 2, 2, 1, 1)
         return kb.as_markup()
 
     @staticmethod
@@ -1433,8 +1434,27 @@ async def main():
     print(f"\n🚀 {PROXY_NAME} STARTED | ADMIN: {ADMIN_ID}")
     logger.info("Инициализация...")
 
+    # --- РЕШЕНИЕ ПРОБЛЕМЫ LEAPCELL ---
+    # Запускаем веб-сервер МГНОВЕННО, до загрузки 11 тысяч прокси
+    async def handle_request(request):
+        return web.Response(text="bot running")
+    
+    app = web.Application()
+    # Ловим вообще любые запросы (в том числе /kaithheathcheck из логов)
+    app.router.add_route('*', '/{tail:.*}', handle_request)
+    
+    runner = web.AppRunner(app)
+    await runner.setup()
+    
+    port = int(os.environ.get("PORT", 8080))
+    site = web.TCPSite(runner, '0.0.0.0', port)
+    await site.start()
+    logger.info(f"✅ Фейковый веб-сервер успешно запущен на порту {port}. Leapcell доволен!")
+    # ---------------------------------
+
     Utils.check_files()
 
+    # Теперь бот может спокойно тратить время на загрузку базы
     total_proxies = len(dm.get_proxies())
     logger.info(f"В базе уже {total_proxies} прокси. Загрузка новых из файлов...")
     c = pm.load_from_file()
@@ -1463,23 +1483,7 @@ async def main():
     # Пинг запускается в фоне
     asyncio.create_task(ping_loop())
 
-    # --- ДОБАВЛЕНО: ФЕЙКОВЫЙ ВЕБ-СЕРВЕР ДЛЯ LEAPCELL ---
-    async def handle_request(request):
-        return web.Response(text="bot running")
-    
-    app = web.Application()
-    app.router.add_get('/', handle_request)
-    
-    runner = web.AppRunner(app)
-    await runner.setup()
-    
-    port = int(os.environ.get("PORT", 8080))
-    site = web.TCPSite(runner, '0.0.0.0', port)
-    await site.start()
-    logger.info(f"✅ Фейковый веб-сервер успешно запущен на порту {port}")
-    # ---------------------------------------------------
-
-    # Безопасный запуск поллинга для бота
+    # Запуск бота
     retries = 5
     while retries > 0:
         try:
